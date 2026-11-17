@@ -6,11 +6,12 @@ from src.models.user import User
 from src.models.source import Source
 from src.models.record import Record
 from src.models.run import Run
-from src.models import note,audit
+from src.models import note,audit,migration
 from src.utils.security import hash_password
 from src.utils.serialization import now
 from src.services.runs import queue
 from src.services.domain_validation import validate_record
+from src.services.units import to_canonical
 
 def seed_values(kind,index,batch,rng):
     if kind=='gaussian':
@@ -32,6 +33,20 @@ def seed_values(kind,index,batch,rng):
 
 def counts(db):
     return {cls.__tablename__:db.scalar(select(func.count()).select_from(cls)) for cls in (User,Source,Record,Run)}
+def seed_declared_batches(db,source,rng):
+    '''新设备演示：24条按 ℉/s 声明上报（已换算 K/s 并保留原值），6条缺失声明进入隔离。'''
+    for index in range(24):
+        reference=source.key+f'-F{index+1:03}'
+        if db.scalar(select(Record.id).where(Record.source_id==source.id,Record.reference==reference)):continue
+        base=seed_values(CONFIG['algorithm'],index,7,rng)
+        declared={'moisture':base['moisture'],'thickness':base['thickness'],'temperature':round(base['temperature']*9/5+32,2),'airflow':base['airflow'],'minutes':round(base['minutes']*60,1)}
+        db.add(Record(source_id=source.id,reference=reference,values=validate_record(to_canonical(declared,'F/s')),unit='F/s',original_values=declared,unit_state='ready'))
+    for index in range(6):
+        reference=source.key+f'-Q{index+1:03}'
+        if db.scalar(select(Record.id).where(Record.source_id==source.id,Record.reference==reference)):continue
+        base=seed_values(CONFIG['algorithm'],index,9,rng)
+        raw={'moisture':base['moisture'],'thickness':base['thickness'],'temperature':round(base['temperature']*9/5+32,2),'airflow':base['airflow'],'minutes':round(base['minutes']*60,1)}
+        db.add(Record(source_id=source.id,reference=reference,values=raw,unit=None,unit_state='quarantined'))
 def seed():
     Base.metadata.create_all(engine);rng=random.Random(42);queued=[]
     with Session() as db:
@@ -47,11 +62,12 @@ def seed():
                 reference=key+f'-{index+1:04}'
                 vals=seed_values(CONFIG['algorithm'],index,batch,rng)
                 if not db.scalar(select(Record.id).where(Record.source_id==source.id,Record.reference==reference)):
-                    db.add(Record(source_id=source.id,reference=reference,values=validate_record(vals)))
+                    db.add(Record(source_id=source.id,reference=reference,values=validate_record(vals),unit='C/min',unit_state='pending'))
+            if batch==2:seed_declared_batches(db,source,rng)
             db.flush()
             if batch==0 and not db.scalar(select(Run.id).where(Run.name=='首轮种子研究')):
                 records=[{'id':r.id,'source_id':r.source_id,'reference':r.reference,'values':r.values} for r in db.scalars(select(Record).where(Record.source_id==source.id).order_by(Record.id))]
-                run=Run(source_id=source.id,name='首轮种子研究',state='queued',parameters=CONFIG['default_parameters'],snapshot={'source':{'id':source.id,'name':source.name,'filename':source.filename},'records':records},created_at=now());db.add(run);db.flush();queued.append(run.id)
+                run=Run(source_id=source.id,name='首轮种子研究',state='queued',parameters=CONFIG['default_parameters'],unit_basis='C/min',snapshot={'source':{'id':source.id,'name':source.name,'filename':source.filename},'records':records,'unit_basis':'C/min','eligible':len(records),'total':len(records)},created_at=now());db.add(run);db.flush();queued.append(run.id)
         db.commit();print(json.dumps(counts(db),ensure_ascii=False))
     for id in queued:
         try:queue.rpush('analysis:queue',id)

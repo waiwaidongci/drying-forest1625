@@ -16,7 +16,7 @@ def execute(id):
         if not r or r.state!='queued':return
         r.state='running';db.commit()
         try:
-            result=calculate(r.snapshot['records'],r.parameters)
+            result=calculate(r.snapshot['records'],r.parameters,'s' if (r.unit_basis or 'C/min')=='K/s' else 'min')
             json.dumps(result,allow_nan=False)
             r.result=result;r.state='completed'
             response=csv_response(result,'run.csv')

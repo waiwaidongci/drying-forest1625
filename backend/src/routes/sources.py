@@ -1,6 +1,6 @@
 from fastapi import APIRouter,Depends
 from ..config.database import db_session
-from ..schemas.source import SourceInput,RecordBatch
+from ..schemas.source import SourceInput,RecordBatch,DeclaredBatch
 from ..services.auth import current_user,writer
 from ..controllers.sources import SourcesController as C
 router=APIRouter()
@@ -14,3 +14,5 @@ def update_source(id:int,data:SourceInput,db=Depends(db_session),u=Depends(write
 def records(id:int,db=Depends(db_session),u=Depends(current_user)):return C.records(db,id)
 @router.post('/sources/{id}/records')
 def add(id:int,data:RecordBatch,db=Depends(db_session),u=Depends(writer)):return C.add_records(db,u,id,data)
+@router.post('/sources/{id}/batches')
+def add_declared(id:int,data:DeclaredBatch,db=Depends(db_session),u=Depends(writer)):return C.add_declared(db,u,id,data)

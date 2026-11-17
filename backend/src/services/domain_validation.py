@@ -1,6 +1,7 @@
 import math
 from ..config.settings import CONFIG
-def validate_record(values):
+def structural_check(values):
+    '''字段级校验：必填、类型、有限数值；不依赖单位口径，隔离记录同样适用。'''
     out={}
     for key,label,kind in CONFIG['fields']:
         v=values.get(key)
@@ -13,6 +14,10 @@ def validate_record(values):
             if not isinstance(v,str) or not v.strip() or len(v)>600:raise ValueError(label+'不能为空且最多600字符')
             v=v.strip()
         out[key]=v
+    return out
+def validate_record(values):
+    '''完整业务校验：结构 + 领域规则。入参单位须为当前存储口径（现行 K/s 或旧 ℃/min）。'''
+    out=structural_check(values)
     kind=CONFIG['algorithm']
     if kind=='gaussian' and (out['rms']<0 or out['centroid']<0 or out['kurtosis']<0):raise ValueError('声学特征不可为负')
     if kind=='density' and (not 0<=out['humidity']<=100 or out['particles']<0):raise ValueError('湿度需在0–100且颗粒浓度非负')

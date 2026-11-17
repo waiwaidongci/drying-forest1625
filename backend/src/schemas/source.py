@@ -8,3 +8,6 @@ class RecordInput(BaseModel):
     values:dict
 class RecordBatch(BaseModel):
     records:list[RecordInput]=Field(min_length=1,max_length=1000)
+class DeclaredBatch(BaseModel):
+    unit:str|None=Field(default=None,max_length=20)
+    records:list[RecordInput]=Field(min_length=1,max_length=1000)

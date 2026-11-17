@@ -8,3 +8,6 @@ class Record(Base):
     source_id=Column(Integer,ForeignKey(CONFIG['source_table']+'.id'),nullable=False)
     reference=Column(String(120),nullable=False)
     values=Column(JSON,nullable=False)
+    unit=Column(String(20),nullable=True)
+    original_values=Column(JSON,nullable=True)
+    unit_state=Column(String(20),default='pending')

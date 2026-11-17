@@ -4,3 +4,4 @@ class SourcesController:
     save=staticmethod(sources.save_source)
     records=staticmethod(sources.list_records)
     add_records=staticmethod(sources.add_records)
+    add_declared=staticmethod(sources.add_declared_batch)
